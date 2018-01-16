@@ -1,0 +1,84 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  1.7.x                                 |
+|   \\  /    A nd           | Web:      http://www.openfoam.org               |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+
+FoamFile
+{
+    version         2.0;
+    format          ascii;
+
+    root            "";
+    case            "";
+    instance        "";
+    local           "";
+
+    class           dictionary;
+    object          controlDict;
+}
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     interFoam;
+
+startFrom       startTime;
+
+startTime       0.00;
+
+stopAt          endTime;
+
+endTime         0.05;
+
+deltaT          0.00000125;
+
+writeControl    adjustableRunTime;
+
+adjustTimeStep  yes;
+
+writeInterval   0.0025;
+
+purgeWrite      0;
+
+writeFormat     ascii;
+
+writePrecision  6;
+
+writeCompression compressed;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable yes;
+
+maxCo           0.2;
+maxAlphaCo      0.2;
+
+maxDeltaT       0.0005;
+
+libs ("libOpenFOAM.so" "libexampleClassModel.so");
+
+functions
+(
+    advance
+    {
+        type advance;
+
+        uncoupledModes  true;
+        outputInterval  1;
+        nExampleProc    1;
+
+        forces
+        {
+            type forces;
+            patches      ( "plate.*" );
+            rhoInf       1.0;
+            CofR         (0 0 0);
+        }
+    }
+);
+
+// ************************************************************************* //

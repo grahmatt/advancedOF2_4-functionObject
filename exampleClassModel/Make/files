@@ -1,0 +1,5 @@
+exampleClassModel.C
+
+advanceFunctionObject/advanceFunctionObject.C
+
+LIB = $(FOAM_USER_LIBBIN)/libexampleClassModel

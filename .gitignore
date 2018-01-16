@@ -1,0 +1,7 @@
+**/*~
+**/*.dep
+**/Make/linux*
+**/lnInclude
+**/html/*
+DTAGS
+testCode
