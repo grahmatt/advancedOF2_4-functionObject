@@ -374,7 +374,7 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
             forcesDict.remove("CofR");
             forcesDict.add("CofR",vector::zero);
 
-            forces f
+            functionObjects::forces f
             (
                 "forces",
                 mesh,
@@ -390,7 +390,8 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
             // structural velocity at fluid faces
             toRot = exampleModel_.currentFaceVelocity()();
 
-            quaternion R(0.0, 0.0, 0.0);
+            // quaternion R(0.0, 0.0, 0.0);
+            quaternion R(quaternion::XYZ, vector::zero);
             // rotate velocities into global coordinates
             forAll(toRot, ii)
             {
@@ -406,7 +407,8 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
             // velocity at fluid faces
             vectorField toRot = exampleModel_.currentFaceVelocity()();
 
-            quaternion R(0.0, 0.0, 0.0);
+            // quaternion R(0.0, 0.0, 0.0);
+            quaternion R(quaternion::XYZ, vector::zero);
             // rotate velocities into global coordinates
             forAll(toRot, ii)
             {
