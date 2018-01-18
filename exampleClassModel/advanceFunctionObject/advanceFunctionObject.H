@@ -35,14 +35,16 @@ SourceFiles
 #ifndef advanceFunctionObject_H
 #define advanceFunctionObject_H
 
-#include "functionObject.H"
+#include "fvMeshFunctionObject.H"
 #include "exampleClassModel.H"
-#include "Switch.H"
 #include "IFstream.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
+{
+
+namespace functionObjects
 {
 
 /*---------------------------------------------------------------------------*\
@@ -51,29 +53,23 @@ namespace Foam
 
 class advanceFunctionObject
 :
-    public functionObject
+    public fvMeshFunctionObject
 {
 protected:
 
     // Protected data
 
-        //- Reference to the time database
-        const Time& time_;
-
-        //- Input dictionary
+        //- Copy of the input dictionary
         dictionary dict_;
 
         //- Example control dictionary
         IOdictionary exampleDict_;
 
-        //- Object registry containing all fields
-        const objectRegistry& obr_;
-
         //- Name of patch boundaries
         labelList patchIDs_;
 
         //- Switch for whether or not the time-step is adjustable
-        Switch adjustTimeStep_;
+        bool adjustTimeStep_;
 
         //- Name of the pressure field
         word pName_;
@@ -108,6 +104,10 @@ protected:
         //- Number of processors to split between
         label nExampleProc_;
 
+        //- Initialized or not. 1 = initialized, -1 attempted, but no "p" field
+        int init_;
+
+
     // Protected Member Functions
 
         //- Return a description (type + name) for the output
@@ -116,13 +116,16 @@ protected:
         //- Get the dictionary to initialize the codeContext
         virtual const dictionary& exampleDict() const;
 
-private:
+
+        //- Initialize
+        bool startup();
+
 
         //- Disallow default bitwise copy construct
-        advanceFunctionObject(const advanceFunctionObject&);
+        advanceFunctionObject(const advanceFunctionObject&) = delete;
 
         //- Disallow default bitwise assignment
-        void operator=(const advanceFunctionObject&);
+        void operator=(const advanceFunctionObject&) = delete;
 
 
 public:
@@ -137,37 +140,32 @@ public:
         advanceFunctionObject
         (
             const word& name,
-            const Time& time,
-            const dictionary& dict,
-            bool readNow=true   // allow child-classes to avoid compilation
+            const Time& runTime,
+            const dictionary& dict
         );
 
 
     //- Destructor
-    virtual ~advanceFunctionObject();
+    virtual ~advanceFunctionObject() = default;
+
 
     // Member Functions
 
-        //- Called at the start of the time-loop
-        virtual bool start();
+        //- Read
+        virtual bool read(const dictionary& dict);
 
-        //- Called at each ++ or += of the time-loop. forceWrite overrides the outputControl behaviour.
-        virtual bool execute(const bool forceWrite);
+        //- Execute
+        virtual bool execute();
 
-        //- Called when Time::run() determines that the time-loop exits.
-        //  By default it simply calls execute().
-        virtual bool end();
+        //- Write. Not used
+        virtual bool write() { return true; }
 
-        //- Read and set the function object if its data have changed
-        virtual bool read(const dictionary&);
-
-        virtual void updateMesh(const Foam::mapPolyMesh&) {}
-
-        virtual void movePoints(const Foam::polyMesh&) {}
 };
 
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+} // End namespace functionObjects
 
 } // End namespace Foam
 

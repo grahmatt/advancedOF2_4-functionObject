@@ -83,7 +83,12 @@ class exampleClassModel
 
         int readModelData();
 
-        tmp< Field<scalarField> > mapFluid2Example(const vectorField&, const vectorField&, vectorField);
+        tmp<Field<scalarField>> mapFluid2Example
+        (
+            const vectorField&,
+            const vectorField&,
+            vectorField&
+        );
 
 public:
 
@@ -98,7 +103,8 @@ public:
         );
 
     //- Destructor
-    ~exampleClassModel();
+    ~exampleClassModel() = default;
+
 
     // Member Functions
 
@@ -132,6 +138,7 @@ public:
 
             //- Return the current velocities at the fluid faces
             tmp<vectorField> currentFaceVelocity();
+
 
         // IOstream Operators
 

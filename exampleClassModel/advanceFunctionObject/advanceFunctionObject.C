@@ -34,12 +34,14 @@ License
 #include "stringOps.H"
 #include "ListListOps.H"
 #include "addToRunTimeSelectionTable.H"
-#include <iostream>
 #include "forces.H"
+#include <iostream>
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 namespace Foam
+{
+namespace functionObjects
 {
     defineTypeNameAndDebug(advanceFunctionObject, 0);
 
@@ -50,19 +52,22 @@ namespace Foam
         dictionary
     );
 }
+}
+
 
 // * * * * * * * * * * * * * Static Member Functions * * * * * * * * * * * * //
 
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-Foam::string Foam::advanceFunctionObject::description() const
+Foam::string Foam::functionObjects::advanceFunctionObject::description() const
 {
     return "functionObject " + name();
 }
 
 
-const Foam::dictionary& Foam::advanceFunctionObject::exampleDict() const
+const Foam::dictionary&
+Foam::functionObjects::advanceFunctionObject::exampleDict() const
 {
     return dict_;
 }
@@ -70,71 +75,71 @@ const Foam::dictionary& Foam::advanceFunctionObject::exampleDict() const
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::advanceFunctionObject::advanceFunctionObject
+Foam::functionObjects::advanceFunctionObject::advanceFunctionObject
 (
     const word& name,
-    const Time& time,
-    const dictionary& dict,
-    bool readNow
+    const Time& runTime,
+    const dictionary& dict
 )
 :
-    functionObject(name),
-    time_(time),
+    fvMeshFunctionObject(name, runTime, dict),
     dict_(dict),
     exampleDict_
     (
         IOobject
         (
             "exampleDict",
-            time.caseSystem(),
-            time,
+            runTime.caseSystem(),
+            runTime,
             IOobject::MUST_READ,
             IOobject::NO_WRITE
         )
     ),
-    obr_
+    patchIDs_(),
+    adjustTimeStep_
     (
-        time.lookupObject<objectRegistry>
-        (
-            dict.lookupOrDefault<word>("region",polyMesh::defaultRegion)
-        )
+        runTime.controlDict().lookupOrDefault("adjustTimeStep", false)
     ),
-    patchIDs_(0,-1),
-    adjustTimeStep_(time.controlDict().lookupOrDefault<Switch>("adjustTimeStep",false)),
     pName_(exampleDict_.lookupOrDefault<word>("p","p")),
     exampleModel_
     (
-        exampleDict_.lookupOrDefault<word>("modelName",""),
-        dict.lookupOrDefault<Switch>("uncoupledModes",Switch::TRUE),
-        time.deltaT().value(),
-        (Pstream::parRun() ? (time.path()/"..") : time.path())
+        exampleDict_.lookupOrDefault<word>("modelName", word::null),
+        dict.lookupOrDefault("uncoupledModes", true),
+        runTime.deltaT().value(),
+        (Pstream::parRun() ? (runTime.path()/"..") : runTime.path())
     ),
-    faceStarts_(1,0),
-    pointStarts_(1,0),
-    patchFaceStarts_(1,0),
-    patchPointStarts_(1,0),
-    faceCenters_(0,vector::zero),
-    fluidPts_(0,vector::zero),
-    outputInterval_(dict.lookupOrDefault<label>("outputInterval",1)),
-    curTimeIndex_(-1)
-{
-    read(dict_);
-}
-
-
-// * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
-
-Foam::advanceFunctionObject::~advanceFunctionObject() {}
+    faceStarts_(1, Zero),
+    pointStarts_(1, Zero),
+    patchFaceStarts_(1, Zero),
+    patchPointStarts_(1, Zero),
+    faceCenters_(),
+    fluidPts_(),
+    outputInterval_(dict.lookupOrDefault<label>("outputInterval", 1)),
+    curTimeIndex_(-1),
+    nExampleProc_(Pstream::nProcs()),
+    init_(0)
+{}
 
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-bool Foam::advanceFunctionObject::start()
+bool Foam::functionObjects::advanceFunctionObject::read(const dictionary& dict)
 {
-    if (!obr_.foundObject<volScalarField>(pName_))
-        return false;
+    dict_ = dict;
+    fvMeshFunctionObject::read(dict_);
 
-    const volScalarField& pressure = obr_.lookupObject<volScalarField>(pName_);
+    return true;
+}
+
+
+bool Foam::functionObjects::advanceFunctionObject::startup()
+{
+    if (!this->foundObject<volScalarField>(pName_))
+    {
+        return false;
+    }
+
+    const volScalarField& pressure = this->lookupObject<volScalarField>(pName_);
 
     // obtain fvMesh to obtain fluid faces
     const fvMesh& mesh = pressure.mesh();
@@ -259,16 +264,30 @@ bool Foam::advanceFunctionObject::start()
 }
 
 
-bool Foam::advanceFunctionObject::execute(const bool forceWrite)
+bool Foam::functionObjects::advanceFunctionObject::execute()
 {
-    if (!obr_.foundObject<volScalarField>(pName_))
+    if (this->foundObject<volScalarField>(pName_))
+    {
+        if (!init_)
+        {
+            init_ = startup() ? 1 : -1;
+        }
+
+        if (init_ < 0)
+        {
+            return false;
+        }
+    }
+    else
+    {
         return false;
+    }
 
     List<scalarField> pList(Pstream::nProcs());
 
     if (patchIDs_.size() > 0)
     {
-        const volScalarField& pressure = obr_.lookupObject<volScalarField>(pName_);
+        const volScalarField& pressure = this->lookupObject<volScalarField>(pName_);
 
         scalarField p(patchFaceStarts_[patchIDs_.size()],0.0);
         forAll(patchIDs_, ii)
@@ -300,10 +319,11 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
             );
         if (p.size() != faceStarts_[Pstream::nProcs()])
         {
-            FatalErrorIn
-            (
-                "advanceFunctionObject::execute(const bool)"
-            )   << "combined pressure and faceCenters are not same size (" << p.size() << " versus " << faceStarts_[Pstream::nProcs()] << ") on processor " << Pstream::myProcNo()
+            FatalErrorInFunction
+                << "combined pressure and faceCenters are not same size ("
+                << p.size() << " != "
+                << faceStarts_[Pstream::nProcs()] << ") on processor "
+                << Pstream::myProcNo()
                 << exit(FatalError);
         }
 
@@ -329,8 +349,8 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
     if (Pstream::myProcNo() < nExampleProc_)
     {
         vector g(vector::zero);
-        if (obr_.foundObject<uniformDimensionedVectorField>("g"))
-            g = obr_.lookupObject<uniformDimensionedVectorField>("g").value();
+        if (foundObject<uniformDimensionedVectorField>("g"))
+            g = this->lookupObject<uniformDimensionedVectorField>("g").value();
 
         vector a(vector::zero), alpha(vector::zero);
 
@@ -365,14 +385,15 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
 
         if (Pstream::master())
         {
-            if (!obr_.foundObject<volScalarField>(pName_))
+            if (!foundObject<volScalarField>(pName_))
                 return false;
 
-            const volScalarField& pressure = obr_.lookupObject<volScalarField>(pName_);
+            const volScalarField& pressure = this->lookupObject<volScalarField>(pName_);
             const fvMesh& mesh = pressure.mesh();
+
             dictionary forcesDict = dict_.subDict("forces");
             forcesDict.remove("CofR");
-            forcesDict.add("CofR",vector::zero);
+            forcesDict.add("CofR", vector::zero);
 
             forces f
             (
@@ -390,7 +411,7 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
             // structural velocity at fluid faces
             toRot = exampleModel_.currentFaceVelocity()();
 
-            quaternion R(0.0, 0.0, 0.0);
+            quaternion R(quaternion::I);
             // rotate velocities into global coordinates
             forAll(toRot, ii)
             {
@@ -406,7 +427,7 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
             // velocity at fluid faces
             vectorField toRot = exampleModel_.currentFaceVelocity()();
 
-            quaternion R(0.0, 0.0, 0.0);
+            quaternion R(quaternion::I);
             // rotate velocities into global coordinates
             forAll(toRot, ii)
             {
@@ -459,12 +480,15 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
     forAll(patchIDs_, ii)
     {
         fvPatchField<vector>& patchField =
-        const_cast<volVectorField&>
-        (
-            obr_.lookupObject<volVectorField>("U")
-        ).boundaryField()[patchIDs_[ii]];
+            this->lookupObjectRef<volVectorField>("U")
+                .boundaryFieldRef()[patchIDs_[ii]];
 
-        List<vector> patchOutField(patchFaceStarts_[ii+1]-patchFaceStarts_[ii], vector::zero);
+        List<vector> patchOutField
+        (
+            patchFaceStarts_[ii+1]-patchFaceStarts_[ii],
+            vector::zero
+        );
+
         for (int jj = patchFaceStarts_[ii]; jj < patchFaceStarts_[ii+1]; jj++)
             patchOutField[jj-patchFaceStarts_[ii]] = outField[jj];
 
@@ -482,20 +506,6 @@ bool Foam::advanceFunctionObject::execute(const bool forceWrite)
         patchField.updateCoeffs();
     }
 
-    return true;
-}
-
-
-bool Foam::advanceFunctionObject::end()
-{
-    return true;
-}
-
-
-bool Foam::advanceFunctionObject::read(const dictionary& dict)
-{
-    Info << "MyProcNo = " << Pstream::myProcNo() << " of " << Pstream::nProcs() << endl;
-    nExampleProc_ = Pstream::nProcs();
     return true;
 }
 
