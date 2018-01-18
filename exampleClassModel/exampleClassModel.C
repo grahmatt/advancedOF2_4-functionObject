@@ -74,17 +74,27 @@ int exampleClassModel::readModelData()
     return 0;
 }
 
-tmp< Field<scalarField> > exampleClassModel::mapFluid2Example(const vectorField& fluidPts, const vectorField& faceCenters, vectorField n)
+
+tmp<Field<scalarField>> exampleClassModel::mapFluid2Example
+(
+    const vectorField& fluidPts,
+    const vectorField& faceCenters,
+    vectorField& unused
+)
 {
+    const label nFaces = faceCenters.size();
+    const label nPoints = fluidPts.size();
 
-    tmp< Field<scalarField> > matching(new Field<scalarField>(2));
-    scalarField& faceMatching = matching()[0];
-    faceMatching.setSize(faceCenters.size(), -1);
-    scalarField& pointMatching = matching()[1];
-    pointMatching.setSize(fluidPts.size(), -1);
+    tmp<Field<scalarField>> matching(new Field<scalarField>(2));
 
-    fluidFaces2ExpMap_.setSize(faceCenters.size());
-    fluidFaces2ExpWeights_.setSize(faceCenters.size());
+    scalarField& faceMatching = matching.ref()[0];
+    faceMatching.setSize(nFaces, -1);
+
+    scalarField& pointMatching = matching.ref()[1];
+    pointMatching.setSize(nPoints, -1);
+
+    fluidFaces2ExpMap_.setSize(nFaces);
+    fluidFaces2ExpWeights_.setSize(nFaces);
 
     return matching;
 }
@@ -108,13 +118,10 @@ exampleClassModel::exampleClassModel
     readModelData();
 }
 
-// * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
-
-Foam::exampleClassModel::~exampleClassModel(){}
 
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
-tmp< Field<scalarField> > exampleClassModel::map2fluidDomain
+tmp<Field<scalarField>> exampleClassModel::map2fluidDomain
 (
     const vectorField& fluidPts,
     const vectorField& fluidFaceCenters,
@@ -124,25 +131,31 @@ tmp< Field<scalarField> > exampleClassModel::map2fluidDomain
     return mapFluid2Example(fluidPts, fluidFaceCenters, fluidFaceNormals);
 }
 
+
 void exampleClassModel::updateState(scalarField& p, vector Ag, vector alpha)
 {
 }
+
 
 void exampleClassModel::updateState(scalarField& p, vector Ag, vector alpha, scalar dt)
 {
 }
 
+
 void exampleClassModel::updateState(scalarField& p, vector Ag, vector alpha, word timeName)
 {
 }
+
 
 void exampleClassModel::updateState(scalarField& p, vector Ag, vector alpha, scalar dt, word timeName)
 {
 }
 
+
 void exampleClassModel::advanceState(scalarField& p, vector Ag, vector alpha)
 {
 }
+
 
 void exampleClassModel::advanceState(scalarField& p, vector Ag, vector alpha, scalar dt)
 {
@@ -155,17 +168,22 @@ void exampleClassModel::advanceState(scalarField& p, vector Ag, vector alpha, sc
 tmp<vectorField> exampleClassModel::currentFaceVelocity()
 {
     tmp<vectorField> tfaceVelocity(new vectorField(fluidFaces2ExpMap_.size(), vector::zero));
-    vectorField& faceVelocity = tfaceVelocity();
+    vectorField& faceVelocity = tfaceVelocity.ref();
+
     forAll(faceVelocity, ii)
     {
-        for (int nn = 0; nn < nModes_; nn++)
+        for (int nn = 0; nn < nModes_; ++nn)
         {
             vector w(vector::zero);
             forAll(fluidFaces2ExpMap_[ii], jj)
             {
                 if (fluidFaces2ExpMap_[ii][jj] != -1)
+                {
                     for (int kk = 0; kk < 6; kk++)
+                    {
                         w += fluidFaces2ExpWeights_[ii][6*jj+kk];
+                    }
+                }
             }
             faceVelocity[ii] += w;
         }
